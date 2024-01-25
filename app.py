@@ -172,7 +172,7 @@ def deposit_money(account_number, bank_id, amount):
 
 def initiate_transfer(username, recipient_account_number, bank_id, amount):
     recipient_exists = check_recipient_exists(recipient_account_number, bank_id)
-
+    
     if not recipient_exists:
         print("\nInvalid Recipient Information.\n")
         return
@@ -194,11 +194,10 @@ def update_transaction_history(username, amount, type):
     cursor = conn.cursor()
 
     try:
-        # SELECT user_id FROM Wallets WHERE user_id = ( SELECT user_id FROM Users WHERE account_number = ? )
         cursor.execute('''
-            INSERT INTO Transactions (transaction_id, wallet_id, amount, type)
+            INSERT INTO Transactions (wallet_id, amount, type)
             VALUES (
-                (SELECT wallet_id FROM Wallets WHERE user_id = ( SELECT user_id FROM Users WHERE username = ? ),
+                (SELECT wallet_id FROM Wallets WHERE user_id = ( SELECT user_id FROM Users WHERE username = ? )),
                 ?, ? 
             )
         ''', (username, amount, type))
@@ -293,6 +292,47 @@ def check_recipient_exists(recipient_account_number, bank_id):
     finally:
         conn.close()
 
+def get_transaction_history(username, pin):
+    pin_salt, stored_pin_hash = retrieve_from_database(username)
+
+    if pin_salt is not None:
+        provided_pin_with_salt = pin_salt + pin
+        provided_pin_hash = hashlib.sha256(provided_pin_with_salt.encode()).hexdigest()
+
+        if provided_pin_hash == stored_pin_hash:
+            print("Authentication successful")
+        else:
+            print("Authentication failed")
+            return
+
+        conn = sqlite3.connect('bank_system.db')
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('''
+                SELECT t.amount, t.type, t.timestamp
+                FROM Transactions t
+                JOIN Wallets w ON t.wallet_id = w.wallet_id
+                JOIN Users u ON w.user_id = u.user_id
+                WHERE u.username = ?
+                ORDER BY t.timestamp DESC
+            ''', (username,))
+
+            transaction_history = cursor.fetchall()
+
+            if transaction_history:
+                print("\nTransaction History:")
+                for transaction in transaction_history:
+                    print(f"Amount: {transaction[0]}, Type: {transaction[1]}, Timestamp: {transaction[2]}")
+            else:
+                print("No transaction history found.")
+        except sqlite3.Error as e:
+            print("Error retrieving transaction history:", str(e))
+        finally:
+            conn.close()
+    else:
+        print("Incorrect PIN.\n")
+
 def main():
     print("Welcome to the Terminal Bank App!\n")
 
@@ -328,6 +368,10 @@ def main():
             bank_id = input("Recipient Bank ID: ")
             amount = float(input("Enter the transfer amount: "))
             initiate_transfer(username, recipient_account_number, bank_id, amount)
+        elif choice == "5":
+            username = input("Enter your username: ")
+            pin = input("Enter 4-digit PIN: ")
+            get_transaction_history(username, pin)
         elif choice == "6":
             print("Thank you for using the Terminal Bank App. Goodbye!")
             break
