@@ -24,7 +24,7 @@ def create_account():
             print(f"{bank_id}: {bank_name}")
 
         username = input("Enter a username (e.g JohnDoe): ")
-        account_number = ''.join([str(random.randint(0, 9)) for _ in range(10)])
+        account_number = ''.join([str(random.randint(0, 9)) for _ in range(5)])
         pin = input("Create 4-digit PIN: ")
         selected_bank_id = input("Enter the ID of the bank you want to register with: ")
 
@@ -91,7 +91,8 @@ def view_account_info(username, pin):
             print(f"Username: {account_info['username']}")
             print(f"Account Number: {account_info['account_number']}")
             print(f"Balance: {account_info['balance']}")
-            print(f"Bank: {account_info['bank_name']} ({account_info['bank_code']})\n")
+            print(f"Bank: {account_info['bank_name']} ({account_info['bank_code']})")
+            print(f"Bank ID: {account_info['bank_id']}\n")
         else:
             print("User does not exist.\n")
     else:
@@ -123,7 +124,7 @@ def get_account_info_from_database(username):
 
     try:
         cursor.execute('''
-            SELECT Users.username, Users.account_number, Wallets.balance, Banks.name AS bank_name, Banks.code AS bank_code
+            SELECT Users.username, Users.account_number, Wallets.balance, Banks.name AS bank_name, Banks.code AS bank_code, Banks.bank_id AS bank_id
             FROM Users
             JOIN Wallets ON Users.user_id = Wallets.user_id
             JOIN Banks ON Wallets.bank_id = Banks.bank_id
@@ -138,7 +139,8 @@ def get_account_info_from_database(username):
                 'account_number': result[1],
                 'balance': result[2],
                 'bank_name': result[3],
-                'bank_code': result[4]
+                'bank_code': result[4],
+                'bank_id': result[5]
             }
             return account_info
         else:
@@ -150,6 +152,30 @@ def get_account_info_from_database(username):
     finally:
         conn.close()
 
+
+def deposit_money(account_number, bank_id, amount):
+    conn = sqlite3.connect('bank_system.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            UPDATE Wallets
+            SET balance = balance + ?
+            WHERE user_id = (
+                SELECT user_id
+                FROM Users
+                WHERE account_number = ?
+            ) AND bank_id = ?
+        ''', (amount, account_number, bank_id))
+        conn.commit()
+        print("Deposit successful.\n")
+    except sqlite3.Error as e:
+        print("Error depositing money:", str(e))
+    finally:
+        conn.close()
+
+
+
 def main():
     print("Welcome to the Terminal Bank App!\n")
 
@@ -157,8 +183,8 @@ def main():
         print("Choose an option:")
         print("1. Create an Account")
         print("2. View Account Information")
-        print("3. Transfer")
-        print("4. Deposit")
+        print("3. Deposit")
+        print("4. Transfer")
         print("5. Transaction History")
         print("6. Exit")
 
@@ -170,6 +196,11 @@ def main():
             username = input("Enter your username: ")
             pin = input("Enter 4-digit PIN: ")
             view_account_info(username, pin)
+        elif choice == "3":
+            account_number = input("Enter your account number: ")
+            bank_id = input("Enter your bank ID: ")
+            amount = float(input("Enter the deposit amount: "))
+            deposit_money(account_number, bank_id, amount)
         elif choice == "6":
             print("Thank you for using the Terminal Bank App. Goodbye!")
             break

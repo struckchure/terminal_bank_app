@@ -1,11 +1,6 @@
 import hashlib
 import random
 import sqlite3
-import secrets
-
-
-
-
 
 def authenticate_user(username, provided_pin):
     # Retrieve salt and hash from the database for the user
@@ -40,8 +35,3 @@ def retrieve_from_database(username):
         return None
     finally:
         conn.close()
-
-
-
-# if __name__ == "__main__":
-#     main()
