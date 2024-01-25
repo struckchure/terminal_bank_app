@@ -19,8 +19,7 @@ cursor.execute('''
     CREATE TABLE IF NOT EXISTS Banks (
         bank_id INTEGER PRIMARY KEY AUTOINCREMENT,
         code TEXT NOT NULL,
-        name TEXT NOT NULL,
-        type TEXT DEFAULT 'Verve' CHECK(type IN ('VISA', 'Verve', 'MasterCard'))
+        name TEXT NOT NULL
     )
 ''')
 
@@ -31,6 +30,7 @@ cursor.execute('''
         user_id INTEGER,
         bank_id INTEGER,
         balance REAL DEFAULT 0,
+        type TEXT DEFAULT 'Verve' CHECK(type IN ('VISA', 'Verve', 'MasterCard')),
         FOREIGN KEY (user_id) REFERENCES Users(user_id),
         FOREIGN KEY (bank_id) REFERENCES Banks(bank_id)
     )
