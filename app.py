@@ -31,7 +31,7 @@ def create_account():
         register_user(username, account_number, pin, selected_bank_id)
 
 def register_user(username, account_number, pin, selected_bank_id):
-    if not (username and account_number.isdigit() and len(account_number) == 10 and pin.isdigit() and len(pin) == 4):
+    if not (username and account_number.isdigit() and len(account_number) == 5 and pin.isdigit() and len(pin) == 4):
         print("Invalid input. Please provide valid username, account number, and 4-digit PIN.")
         return
 
@@ -61,7 +61,7 @@ def register_user(username, account_number, pin, selected_bank_id):
             ''', (user_id, bank_id))
 
             conn.commit()
-            print("User registration successful.\n\n")
+            print("\nUser registration successful.\n\n")
         else:
             print("Invalid bank ID. User registration failed.\n\n")
     except sqlite3.Error as e:
@@ -70,21 +70,18 @@ def register_user(username, account_number, pin, selected_bank_id):
         conn.close()
 
 def view_account_info(username, pin):
-    # Retrieve salt and hash from the database for the user
     pin_salt, stored_pin_hash = retrieve_from_database(username)
 
     if pin_salt is not None:
-        # Combine provided PIN with retrieved salt and hash it
         provided_pin_with_salt = pin_salt + pin
         provided_pin_hash = hashlib.sha256(provided_pin_with_salt.encode()).hexdigest()
 
-        # Compare the provided hash with the stored hash for authentication
         if provided_pin_hash == stored_pin_hash:
             print("Authentication successful")
         else:
             print("Authentication failed")
-            
-        # Fetch and display user account information
+            return
+
         account_info = get_account_info_from_database(username)
         if account_info:
             print("\nAccount Information:")
@@ -97,9 +94,8 @@ def view_account_info(username, pin):
             print("User does not exist.\n")
     else:
         print("Incorrect PIN.\n")
-        
+
 def retrieve_from_database(username):
-    # Fetch pin_salt and pin_hash from the database based on the username
     conn = sqlite3.connect('bank_system.db')
     cursor = conn.cursor()
 
@@ -111,10 +107,10 @@ def retrieve_from_database(username):
             return result
         else:
             print("User not found in the database.")
-            return None, None  # Return default values when no data is found
+            return None, None
     except sqlite3.Error as e:
         print("Error retrieving data from the database:", str(e))
-        return None, None  # Return default values on error
+        return None, None
     finally:
         conn.close()
 
@@ -152,7 +148,6 @@ def get_account_info_from_database(username):
     finally:
         conn.close()
 
-
 def deposit_money(account_number, bank_id, amount):
     conn = sqlite3.connect('bank_system.db')
     cursor = conn.cursor()
@@ -175,6 +170,128 @@ def deposit_money(account_number, bank_id, amount):
         conn.close()
 
 
+def initiate_transfer(username, recipient_account_number, bank_id, amount):
+    recipient_exists = check_recipient_exists(recipient_account_number, bank_id)
+
+    if not recipient_exists:
+        print("\nInvalid Recipient Information.\n")
+        return
+
+    sender_balance = get_user_balance(username)
+
+    if sender_balance < amount:
+        print("Insufficient balance.")
+        return
+
+    deduct_from_balance(username, amount)
+    add_to_balance(recipient_account_number, amount, bank_id)
+    update_transaction_history(username, amount, "DEBIT")
+
+    print("Transfer successful.")
+
+def update_transaction_history(username, amount, type):
+    conn = sqlite3.connect('bank_system.db')
+    cursor = conn.cursor()
+
+    try:
+        # SELECT user_id FROM Wallets WHERE user_id = ( SELECT user_id FROM Users WHERE account_number = ? )
+        cursor.execute('''
+            INSERT INTO Transactions (transaction_id, wallet_id, amount, type)
+            VALUES (
+                (SELECT wallet_id FROM Wallets WHERE user_id = ( SELECT user_id FROM Users WHERE username = ? ),
+                ?, ? 
+            )
+        ''', (username, amount, type))
+        conn.commit()
+    except sqlite3.Error as e:
+        print("Error updating transaction history:", str(e))
+    finally:
+        conn.close()
+
+def add_to_balance(account_number, amount, bank_id):
+    conn = sqlite3.connect('bank_system.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            UPDATE Wallets
+            SET balance = balance + ?
+            WHERE user_id = (
+                SELECT user_id
+                FROM Users
+                WHERE account_number = ?
+            ) AND bank_id = ?
+        ''', (amount, account_number, bank_id))
+        conn.commit()
+    except sqlite3.Error as e:
+        print("Error adding to balance:", str(e))
+    finally:
+        conn.close()
+
+def deduct_from_balance(username, amount):
+    conn = sqlite3.connect('bank_system.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            UPDATE Wallets
+            SET balance = balance - ?
+            WHERE user_id = (
+                SELECT user_id
+                FROM Users
+                WHERE username = ?
+            )
+        ''', (amount, username))
+        conn.commit()
+    except sqlite3.Error as e:
+        print("Error deducting from balance:", str(e))
+    finally:
+        conn.close()
+
+def get_user_balance(username):
+    conn = sqlite3.connect('bank_system.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT Wallets.balance
+            FROM Users
+            JOIN Wallets ON Users.user_id = Wallets.user_id
+            WHERE Users.username = ?
+        ''', (username,))
+        balance = cursor.fetchone()
+
+        if balance:
+            return balance[0]
+        else:
+            return 0
+    except sqlite3.Error as e:
+        print("Error getting user balance:", str(e))
+        return 0
+    finally:
+        conn.close()
+
+def check_recipient_exists(recipient_account_number, bank_id):
+    conn = sqlite3.connect('bank_system.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT user_id FROM Wallets WHERE user_id = ( SELECT user_id FROM Users WHERE account_number = ? )
+            AND bank_id = ?
+        ''', (recipient_account_number, bank_id))
+
+        recipient_id = cursor.fetchone()
+
+        if recipient_id:
+            return True
+        else:
+            return False
+    except sqlite3.Error as e:
+        print("Error checking recipient:", str(e))
+        return False
+    finally:
+        conn.close()
 
 def main():
     print("Welcome to the Terminal Bank App!\n")
@@ -201,6 +318,16 @@ def main():
             bank_id = input("Enter your bank ID: ")
             amount = float(input("Enter the deposit amount: "))
             deposit_money(account_number, bank_id, amount)
+        elif choice == "4":
+            username = input("Enter your username: ")
+            pin = input("Enter 4-digit PIN: ")
+            view_account_info(username, pin)
+            print('\nEnter Recipient Information below')
+
+            recipient_account_number = input("Recipient Account Number: ")
+            bank_id = input("Recipient Bank ID: ")
+            amount = float(input("Enter the transfer amount: "))
+            initiate_transfer(username, recipient_account_number, bank_id, amount)
         elif choice == "6":
             print("Thank you for using the Terminal Bank App. Goodbye!")
             break
