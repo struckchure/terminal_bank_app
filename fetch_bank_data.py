@@ -24,9 +24,9 @@ def insert_banks_data(data):
 
     for bank in data:
         cursor.execute('''
-            INSERT OR IGNORE INTO Banks (bank_id, code, name)
-            VALUES (?, ?, ?)
-        ''', (bank['id'], bank['code'], bank['name']))
+            INSERT OR IGNORE INTO Banks (code, name)
+            VALUES (?, ?)
+        ''', (bank['code'], bank['name']))
 
     conn.commit()
     conn.close()
