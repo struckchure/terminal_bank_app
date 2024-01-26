@@ -138,26 +138,29 @@ class AccountManager:
             print("User not found in the database.")
             return None
 
-    def get_account_info_by_account_number(self, recipient_account_number: str) -> Optional[Dict[str, str]]:
+    def get_user_info(self, identifier: str) -> Optional[Dict[str, str]]:
         result = self.db_manager.fetch_query('''
-            SELECT Users.username, Users.account_number, Wallets.balance, Banks.name AS bank_name, 
-            Banks.code AS bank_code, Banks.bank_id AS bank_id
+            SELECT Users.user_id, Users.username, Users.account_number, Wallets.wallet_id, Wallets.bank_id,
+                Wallets.balance, Banks.code AS bank_code, Banks.name AS bank_name
             FROM Users
             JOIN Wallets ON Users.user_id = Wallets.user_id
             JOIN Banks ON Wallets.bank_id = Banks.bank_id
-            WHERE Users.account_number = ?
-        ''', (recipient_account_number,))
+            WHERE Users.username = ? OR Users.account_number = ? OR Users.user_id = ?
+        ''', (identifier, identifier, identifier))
+
         if result:
             return {
-                'username': result[0],
-                'account_number': result[1],
-                'balance': result[2],
-                'bank_name': result[3],
-                'bank_code': result[4],
-                'bank_id': result[5]
+                'user_id': result[0],
+                'username': result[1],
+                'account_number': result[2],
+                'wallet_id': result[3],
+                'bank_id': result[4],
+                'balance': result[5],
+                'bank_code': result[6],
+                'bank_name': result[7]
             }
         else:
-            print("Beneficiary not found.")
+            print("User not found.")
             return None
 
     def get_account_balance(self, username: str) -> Optional[Dict[str, str]]:
@@ -189,7 +192,8 @@ class TransactionManager:
             ) AND bank_id = ?
         ''', (amount, account_number, bank_id))
 
-    def transfer(self, username, recipient_account_number: str, bank_id: int, amount: float, description: str):
+    def transfer(self, account_manager, username, recipient_account_number: str, bank_id: int, amount: float, description: str):
+        # add to balance 
         self.db_manager.execute_query('''
             UPDATE Wallets
             SET balance = balance + ?
@@ -199,7 +203,8 @@ class TransactionManager:
                 WHERE account_number = ?
             ) AND bank_id = ?
         ''', (amount, recipient_account_number, bank_id))
-        
+
+        # deduct from account 
         self.db_manager.execute_query('''
             UPDATE Wallets
             SET balance = balance - ?
@@ -209,18 +214,31 @@ class TransactionManager:
                 WHERE username = ?
             )
         ''', (amount, username))
+        sender = account_manager.get_user_info(username)
+        receiver = account_manager.get_user_info(recipient_account_number)
 
-        self.record_transaction(amount, description)
-        self.record_transaction(amount, description)
+        sender_user_id = sender['user_id']
+        sender_account_number = sender['account_number']
+        sender_bank_id = sender['bank_id']
+        receiver_bank_id = receiver['bank_id']
+        receiver_user_id = receiver['user_id']
+
+        self.record_transaction(sender_user_id, sender_account_number, receiver_user_id, recipient_account_number, amount, description, sender_bank_id, receiver_bank_id)
         
-    def record_transaction(self, amount: float, description: str):
+    def record_transaction(self, sender_user_id, sender_account_number, receiver_user_id, receiver_account_number, amount, description, sender_bank_id, receiver_bank_id):
         # Record the transaction in the database
         self.db_manager.execute_query('''
-            INSERT INTO Transactions (amount, description, transaction_type, timestamp)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (amount, description, 'DEBIT' if amount < 0 else 'CREDIT'))
+            INSERT INTO TransactionsHistory (user_id, timestamp, amount, transaction_type, description, sender_account_number, receiver_account_number, sender_bank_id, receiver_bank_id)
+            VALUES (?, CURRENT_TIMESTAMP, ?, 'DEBIT', ?, ?, ?, ?, ?)
+        ''', (sender_user_id, amount, description, sender_account_number, receiver_account_number, sender_bank_id, receiver_bank_id))
 
-    def transaction_history(self, username, pin):
+        # Record the receiver's transaction (CREDIT)
+        self.db_manager.execute_query('''
+            INSERT INTO TransactionsHistory (user_id, timestamp, amount, transaction_type, description, sender_account_number, receiver_account_number, sender_bank_id, receiver_bank_id)
+            VALUES (?, CURRENT_TIMESTAMP, ?, 'CREDIT', ?, ?, ?, ?, ?)
+        ''', (receiver_user_id, amount, description, sender_account_number, receiver_account_number, sender_bank_id, receiver_bank_id))
+
+    def transaction_history(self, account_manager, username, pin):
         # Authenticate the user
         auth_manager = AuthManager(self.db_manager)
         if not auth_manager.authenticate_user(username, pin):
@@ -260,7 +278,8 @@ class TransactionManager:
                 sender_bank_name = transaction[6]
                 receiver_bank_name = transaction[7]
                 sender_username = transaction[8]
-                receiver_username = transaction[9]
+                # receiver_username = transaction[9]
+                receiver_username = account_manager.get_user_info(sender_account_number)['username']
 
                 print(f"Timestamp: {timestamp}, Amount: {amount}, Type: {transaction_type}, Description: {description}")
                 print(f"Sender Account Number: {sender_account_number}, Sender Bank: {sender_bank_name}, Sender Username: {sender_username}")
@@ -302,7 +321,7 @@ def main():
             username = input("Enter your username: ")
             pin = input("Enter 4-digit PIN: ")
             if auth_manager.authenticate_user(username, pin):
-                account_info = account_manager.get_account_info_by_username(username)
+                account_info = account_manager.get_user_info(username)
                 if account_info:
                     print("\nAccount Information:")
                     print(f"Username: {account_info['username']}")
@@ -327,7 +346,7 @@ def main():
                 print("\nAuthentication Successful\n")
                 bank_id = input("Enter Recipient Bank ID: ")
                 recipient_account_number = input("Enter Recipient Account Number: ")
-                recipient_account_info = account_manager.get_account_info_by_account_number(recipient_account_number)
+                recipient_account_info = account_manager.get_user_info(recipient_account_number)
                 sender_account_balance = account_manager.get_account_balance(username)
                 if recipient_account_info:
                     print("\nConfirm Account Information:")
@@ -337,19 +356,19 @@ def main():
                     print(f"Bank Name: {recipient_account_info['bank_name']} ({recipient_account_info['bank_code']})")
                     print(f"Bank ID: {recipient_account_info['bank_id']}\n")
 
-                amount = float(input("Enter Transfer Amount: "))
-                description = input("Add Description (/*Optional*/): ")
-                if sender_account_balance < amount:
-                    print("Insufficient balance.")
-                transaction_manager.transfer(username, recipient_account_number, bank_id, amount, description)
-                print("\nTransfer Successful\n")
+                    amount = float(input("Enter Transfer Amount: "))
+                    description = input("Add Description (Optional): ")
+                    if sender_account_balance < amount:
+                        print("Insufficient balance.")
+                    transaction_manager.transfer(account_manager, username, recipient_account_number, bank_id, amount, description)
+                    print("\nTransfer Successful\n")
             else:
                 print("Authentication failed")
 
         elif choice == "5":
             username = input("Enter your username: ")
             pin = input("Enter 4-digit PIN: ")
-            transaction_manager.transaction_history(username, pin)
+            transaction_manager.transaction_history(account_manager, username, pin)
                 
         elif choice == "6":
             print("Thank you for using the Terminal Bank App. Goodbye!")

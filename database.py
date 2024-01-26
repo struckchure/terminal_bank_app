@@ -51,6 +51,8 @@ cursor.execute('''
         receiver_bank_id INTEGER,
         FOREIGN KEY (user_id) REFERENCES Users(user_id),
         FOREIGN KEY (sender_bank_id) REFERENCES Banks(bank_id),
+        FOREIGN KEY (sender_account_number) REFERENCES Users(account_number),
+        FOREIGN KEY (receiver_account_number) REFERENCES Users(account_number),
         FOREIGN KEY (receiver_bank_id) REFERENCES Banks(bank_id)
     )
 ''')
