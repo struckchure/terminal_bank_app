@@ -38,13 +38,20 @@ cursor.execute('''
 
 # create transactions table
 cursor.execute('''
-    CREATE TABLE IF NOT EXISTS Transactions (
-        transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        wallet_id INTEGER,
-        type TEXT NOT NULL,
-        amount REAL NOT NULL,
+    CREATE TABLE IF NOT EXISTS TransactionsHistory (
+        transaction_id INTEGER PRIMARY KEY,
+        user_id INTEGER,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (wallet_id) REFERENCES Wallets(wallet_id)
+        amount REAL,
+        transaction_type TEXT,
+        description TEXT,
+        sender_account_number TEXT,
+        receiver_account_number TEXT,
+        sender_bank_id INTEGER,
+        receiver_bank_id INTEGER,
+        FOREIGN KEY (user_id) REFERENCES Users(user_id),
+        FOREIGN KEY (sender_bank_id) REFERENCES Banks(bank_id),
+        FOREIGN KEY (receiver_bank_id) REFERENCES Banks(bank_id)
     )
 ''')
 
