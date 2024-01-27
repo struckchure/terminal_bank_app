@@ -13,8 +13,8 @@ try:
     print("Initialization successfully.")
 except Exception:
     print("Initialization failed.")
-time.sleep(3)
-print("Starting main application..."), time.sleep(5)
+time.sleep(2)
+print("Starting main application..."), time.sleep(2)
 os.system('cls' if platform.system() == 'Windows' else 'clear')
 # Main function 
 def main():

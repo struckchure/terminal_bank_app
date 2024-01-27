@@ -141,12 +141,12 @@ class UserManager:
         # user_id = self.db_manager.execute_query('SELECT last_insert_rowid()')[0]
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        user_id = cursor.lastrowid
+        # user_id = cursor.lastrowid
+        cursor.execute('SELECT user_id FROM Users WHERE username = ?', (username,))
+        user_id = cursor.fetchone()[0]
 
         cursor.execute('SELECT bank_id FROM Banks WHERE bank_id = ?', (selected_bank_id,))
         bank_row = cursor.fetchone()
-        # Check if selected_bank_id exists
-        # bank_row = self.db_manager.execute_query('SELECT bank_id FROM Banks WHERE bank_id = ?', (selected_bank_id,))
         if bank_row:
             bank_id = bank_row[0]
             self.db_manager.execute_query('''
