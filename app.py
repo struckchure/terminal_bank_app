@@ -1,7 +1,22 @@
-import random
+import os, platform, random, time
 from typing import Tuple, Optional, Dict, List
 from data_operations.Manager import *
+from config import *
 
+
+print("Initializing application...")
+initialization = Initialization()
+# Create database
+initialization.create_database_tables()
+# Load api data to bank table 
+try:
+    initialization.load_bank_api()
+    print("Initialization successfully.")
+except Exception:
+    print("Initialization failed.")
+time.sleep(3)
+print("Starting main application..."), time.sleep(5)
+os.system('cls' if platform.system() == 'Windows' else 'clear')
 # Main function 
 def main():
     db_manager = DatabaseManager()
@@ -9,7 +24,7 @@ def main():
     auth_manager = AuthManager(db_manager)
     account_manager = AccountManager(db_manager)
     transaction_manager = TransactionManager(db_manager)
-
+    
     print("Welcome to the Terminal Bank App!")
 
     while True:
