@@ -76,12 +76,15 @@ class Initialization:
             if data:
                 conn = sqlite3.connect(DB_NAME)
                 cursor = conn.cursor()
-                cursor.executemany('''
-                    INSERT OR IGNORE INTO Banks (code, name) VALUES (?, ?)
-                ''', [(bank['code'], bank['name']) for bank in data])
-                conn.commit()
-                conn.close()
-                print("Bank data successfully inserted.")
+                cursor.execute('''SELECT COUNT(*) FROM Banks''')
+                bank = cursor.fetchone()[0]
+                if bank == 0:
+                    cursor.executemany('''
+                        INSERT OR IGNORE INTO Banks (code, name) VALUES (?, ?)
+                    ''', [(bank['code'], bank['name']) for bank in data])
+                    conn.commit()
+                    conn.close()
+                    print("Bank data successfully inserted.")
             else:
                 print("No bank data found in the API response.")
         else:
