@@ -1,5 +1,5 @@
 import hashlib, sqlite3, secrets, requests
-from typing import Tuple, Optional, Dict, List
+from typing import Tuple, Optional, Dict, List, Any
 from config import *
 
 # Initialization manager
@@ -104,17 +104,27 @@ class DatabaseManager:
             print("Database Error:", str(e))
             return None
 
-    def execute_query(self, query: str, params: Optional[Tuple] = None):
+    def execute_query(self, query: str, params: Optional[Tuple] = None) -> Optional[List[Dict[str, Any]]]:
         cursor = self.conn.cursor()
         try:
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            self.conn.commit()
+
+            if query.strip().lower().startswith(('select', 'pragma')):
+                return self._fetch_rows(cursor)
+            elif query.strip().lower().startswith(('insert', 'update', 'delete')):
+                self.conn.commit()
+                return None  # No rows to return for INSERT, UPDATE, DELETE
         except sqlite3.Error as e:
             print("Database Error:", str(e))
             return None
+
+    def _fetch_rows(self, cursor: sqlite3.Cursor) -> List[Dict[str, Any]]:
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        return [dict(zip(columns, row)) for row in rows]
         
 # User manager 
         
@@ -138,24 +148,15 @@ class UserManager:
             VALUES (?, ?, ?, ?)
         ''', (username, account_number, pin_salt, pin_hash))
 
-        # user_id = self.db_manager.execute_query('SELECT last_insert_rowid()')[0]
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        # user_id = cursor.lastrowid
-        cursor.execute('SELECT user_id FROM Users WHERE username = ?', (username,))
-        user_id = cursor.fetchone()[0]
-
-        cursor.execute('SELECT bank_id FROM Banks WHERE bank_id = ?', (selected_bank_id,))
-        bank_row = cursor.fetchone()
-        if bank_row:
-            bank_id = bank_row[0]
-            self.db_manager.execute_query('''
-                INSERT INTO Wallets (user_id, bank_id, balance, type)
-                VALUES (?, ?, 0, 'Verve')
-            ''', (user_id, bank_id))
-            print("\nUser registration successful.\n\n")
-        else:
-            print("Invalid bank ID. User registration failed.\n\n")
+        # Create wallet for user 
+        user_id = self.db_manager.execute_query('SELECT last_insert_rowid()')
+        bank_id = self.db_manager.execute_query('SELECT bank_id FROM Banks WHERE bank_id = ?', (selected_bank_id,))
+        
+        self.db_manager.execute_query('''
+            INSERT INTO Wallets (user_id, bank_id)
+            VALUES (?, ?)
+        ''', (next(iter(user_id[0].values())), next(iter(bank_id[0].values())),))
+        print("\nUser registration successful.\n\n")
 # Authentication manager 
             
 class AuthManager:
@@ -165,7 +166,10 @@ class AuthManager:
     def retrieve_password_hash(self, username: str) -> Tuple[Optional[str], Optional[str]]:
         result = self.db_manager.execute_query('SELECT pin_salt, pin_hash FROM Users WHERE username = ?', (username,))
         if result:
-            return result
+            first_row = result[0]  # Get the first dictionary in the list
+            pin_salt = first_row.get('pin_salt')
+            pin_hash = first_row.get('pin_hash')
+            return pin_salt, pin_hash
         else:
             print("\nUser not found in the database.")
             return None, None
@@ -184,77 +188,39 @@ class AccountManager:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def get_account_info_by_username(self, username: str) -> Optional[Dict[str, str]]:
-        result = self.db_manager.execute_query('''
-            SELECT Users.username, Users.account_number, Wallets.balance, Banks.name AS bank_name, 
-            Banks.code AS bank_code, Banks.bank_id AS bank_id
-            FROM Users
-            JOIN Wallets ON Users.user_id = Wallets.user_id
-            JOIN Banks ON Wallets.bank_id = Banks.bank_id
-            WHERE Users.username = ?
-        ''', (username,))
-        if result:
-            return {
-                'username': result[0],
-                'account_number': result[1],
-                'balance': result[2],
-                'bank_name': result[3],
-                'bank_code': result[4],
-                'bank_id': result[5]
-            }
-        else:
-            print("User not found in the database.")
-            return None
-
     def get_user_info(self, identifier: str) -> Optional[Dict[str, str]]:
-        result = self.db_manager.execute_query('''
+        query = '''
             SELECT Users.user_id, Users.username, Users.account_number, Wallets.wallet_id, Wallets.bank_id,
                 Wallets.balance, Banks.code AS bank_code, Banks.name AS bank_name
             FROM Users
             JOIN Wallets ON Users.user_id = Wallets.user_id
             JOIN Banks ON Wallets.bank_id = Banks.bank_id
             WHERE Users.username = ? OR Users.account_number = ? OR Users.user_id = ?
-        ''', (identifier, identifier, identifier))
+        '''
+        user_info = self.db_manager.execute_query(query, (identifier, identifier, identifier))
 
-        if result:
+        if user_info:
+            user = user_info[0]  # Get the first row from the result
             return {
-                'user_id': result[0],
-                'username': result[1],
-                'account_number': result[2],
-                'wallet_id': result[3],
-                'bank_id': result[4],
-                'balance': result[5],
-                'bank_code': result[6],
-                'bank_name': result[7]
+                'user_id': user.get('user_id'),
+                'username': user.get('username'),
+                'account_number': user.get('account_number'),
+                'wallet_id': user.get('wallet_id'),
+                'bank_id': user.get('bank_id'),
+                'balance': user.get('balance'),
+                'bank_code': user.get('bank_code'),
+                'bank_name': user.get('bank_name')
             }
         else:
             print("User not found.")
             return None
 
-    def get_account_balance(self, username: str) -> Optional[Dict[str, str]]:
-        result = self.db_manager.execute_query('''
-            SELECT Wallets.balance
-            FROM Users
-            JOIN Wallets ON Users.user_id = Wallets.user_id
-            WHERE Users.username = ?
-        ''', (username,))
-
-        if result:
-            return result[0]
-        else:
-            return 0
-
     def get_banks(self):
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-
         try:
-            cursor.execute('SELECT bank_id, name FROM Banks')
-            return cursor.fetchall()
+            query = 'SELECT bank_id, name FROM Banks'
+            return self.db_manager.execute_query(query)
         except sqlite3.Error as e:
             print("Error fetching available banks:", str(e))
-        finally:
-            conn.close()
 
 # Transaction manager 
 class TransactionManager:

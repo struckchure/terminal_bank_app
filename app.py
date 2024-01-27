@@ -3,19 +3,20 @@ from typing import Tuple, Optional, Dict, List
 from data_operations.Manager import *
 from config import *
 
-print(f"Initializing Database: {DB_NAME}")
-initialization = Initialization()
-# Create database
-initialization.create_database_tables()
-# Load api data to bank table 
-try:
-    initialization.load_bank_api()
-    print("Initialization successfully.")
-except Exception:
-    print("Initialization failed.")
-time.sleep(2)
-print("Starting main application..."), time.sleep(2)
-os.system('cls' if platform.system() == 'Windows' else 'clear')
+# print(f"Initializing Database: {DB_NAME}")
+# initialization = Initialization()
+# # Create database
+# initialization.create_database_tables()
+# # Load api data to bank table 
+# try:
+#     initialization.load_bank_api()
+#     print("Initialization successfully.")
+# except Exception:
+#     print("Initialization failed.")
+# time.sleep(2)
+# print("Starting main application..."), time.sleep(2)
+# os.system('cls' if platform.system() == 'Windows' else 'clear')
+
 # Main function 
 def main():
     db_manager = DatabaseManager()
@@ -46,7 +47,7 @@ def main():
                 if banks:
                     print("Available Banks:")
                     for bank in banks:
-                        print(f"{bank[0]}: {bank[1]}")
+                        print(f"{bank.get('bank_id')}: {bank.get('name')}")
                     selected_bank_id = input("Enter the ID of the bank you want to register with: ")
                 else:
                     print("No banks found in the database.")
@@ -85,7 +86,7 @@ def main():
                 bank_id = input("Enter Recipient Bank ID: ")
                 recipient_account_number = input("Enter Recipient Account Number: ")
                 recipient_account_info = account_manager.get_user_info(recipient_account_number)
-                sender_account_balance = account_manager.get_account_balance(username)
+                sender_account_balance = account_manager.get_user_info(username)['balance']
                 if recipient_account_info:
                     print("\nConfirm Account Information:")
                     print(f"Username: {recipient_account_info['username']}")
