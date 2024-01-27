@@ -9,7 +9,7 @@ initialization = Initialization()
 initialization.create_database_tables()
 # Load api data to bank table 
 try:
-    initialization.load_bank_api()
+    # initialization.load_bank_api()
     print("Initialization successfully.")
 except Exception:
     print("Initialization failed.")
@@ -41,7 +41,17 @@ def main():
             username = input("Enter a username (e.g JohnDoe): ")
             account_number = ''.join([str(random.randint(0, 9)) for _ in range(5)])
             pin = input("Create 4-digit PIN: ")
-            selected_bank_id = input("Enter the ID of the bank you want to register with: ")
+            try:
+                banks = account_manager.get_banks()
+                if banks:
+                    print("Available Banks:")
+                    for bank in banks:
+                        print(f"{bank[0]}: {bank[1]}")
+                    selected_bank_id = input("Enter the ID of the bank you want to register with: ")
+                else:
+                    print("No banks found in the database.")
+            except Exception as e:
+                print(f"Error fetching banks from the database: {e}")
 
             user_manager.register_user(username, account_number, pin, int(selected_bank_id))
 

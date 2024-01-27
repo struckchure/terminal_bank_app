@@ -135,10 +135,15 @@ class UserManager:
             VALUES (?, ?, ?, ?)
         ''', (username, account_number, pin_salt, pin_hash))
 
-        user_id = self.db_manager.execute_query('SELECT last_insert_rowid()')[0]
+        # user_id = self.db_manager.execute_query('SELECT last_insert_rowid()')[0]
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        user_id = cursor.lastrowid
 
+        cursor.execute('SELECT bank_id FROM Banks WHERE bank_id = ?', (selected_bank_id,))
+        bank_row = cursor.fetchone()
         # Check if selected_bank_id exists
-        bank_row = self.db_manager.execute_query('SELECT bank_id FROM Banks WHERE bank_id = ?', (selected_bank_id,))
+        # bank_row = self.db_manager.execute_query('SELECT bank_id FROM Banks WHERE bank_id = ?', (selected_bank_id,))
         if bank_row:
             bank_id = bank_row[0]
             self.db_manager.execute_query('''
@@ -235,6 +240,18 @@ class AccountManager:
             return result[0]
         else:
             return 0
+
+    def get_banks(self):
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('SELECT bank_id, name FROM Banks')
+            return cursor.fetchall()
+        except sqlite3.Error as e:
+            print("Error fetching available banks:", str(e))
+        finally:
+            conn.close()
 
 # Transaction manager 
 class TransactionManager:
