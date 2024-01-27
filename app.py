@@ -9,7 +9,7 @@ initialization = Initialization()
 initialization.create_database_tables()
 # Load api data to bank table 
 try:
-    # initialization.load_bank_api()
+    initialization.load_bank_api()
     print("Initialization successfully.")
 except Exception:
     print("Initialization failed.")
