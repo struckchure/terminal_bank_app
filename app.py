@@ -3,7 +3,6 @@ from typing import Tuple, Optional, Dict, List
 from data_operations.Manager import *
 from config import *
 
-
 print("Initializing application...")
 initialization = Initialization()
 # Create database

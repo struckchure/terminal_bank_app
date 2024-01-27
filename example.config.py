@@ -1,0 +1,3 @@
+DB_NAME = ''
+API_URL = ''
+API_SECRET_KEY = ''
