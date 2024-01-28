@@ -66,7 +66,9 @@ def main():
 
         elif choice == "5":
             username, pin = input("Enter your username: "), input("Enter 4-digit PIN: ")
-            transaction_manager.transaction_history(account_manager, username, pin)
+            auth_manager.authenticate_user(username, pin)
+            user_id = account_manager.get_user_info(username)['user_id']
+            transaction_manager.transaction_history(account_manager, user_id)
                 
         elif choice == "6":
             _exit()

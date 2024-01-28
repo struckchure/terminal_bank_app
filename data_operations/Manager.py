@@ -165,11 +165,11 @@ class AuthManager:
         self.db_manager = db_manager
 
     def retrieve_password_hash(self, username: str) -> Tuple[Optional[str], Optional[str]]:
-        result = self.db_manager.execute_query('SELECT pin_salt, pin_hash FROM Users WHERE username = ?', (username,))
+        query = 'SELECT pin_salt, pin_hash FROM Users WHERE username = ?'
+        result = self.db_manager.execute_query(query, (username,))
         if result:
             first_row = result[0]  # Get the first dictionary in the list
-            pin_salt = first_row.get('pin_salt')
-            pin_hash = first_row.get('pin_hash')
+            pin_salt, pin_hash = first_row.get('pin_salt'), first_row.get('pin_hash')
             return pin_salt, pin_hash
         else:
             print("\nUser not found in the database.")
@@ -199,27 +199,31 @@ class AccountManager:
             JOIN Banks ON Wallets.bank_id = Banks.bank_id
             WHERE Users.username = ? OR Users.account_number = ? OR Users.user_id = ?
         '''
-        user_info = self.db_manager.execute_query(query, (identifier, identifier, identifier))
+        try:
+            user_info = self.db_manager.execute_query(query, (identifier, identifier, identifier))
 
-        if user_info:
-            user = user_info[0]  # Get the first row from the result
-            return {
-                'user_id': user.get('user_id'),
-                'username': user.get('username'),
-                'account_number': user.get('account_number'),
-                'wallet_id': user.get('wallet_id'),
-                'bank_id': user.get('bank_id'),
-                'balance': user.get('balance'),
-                'bank_code': user.get('bank_code'),
-                'bank_name': user.get('bank_name')
-            }
-        else:
-            print("User not found.")
+            if user_info:
+                user = user_info[0]  # Get the first row from the result
+                return {
+                    'user_id': user.get('user_id'),
+                    'username': user.get('username'),
+                    'account_number': user.get('account_number'),
+                    'wallet_id': user.get('wallet_id'),
+                    'bank_id': user.get('bank_id'),
+                    'balance': user.get('balance'),
+                    'bank_code': user.get('bank_code'),
+                    'bank_name': user.get('bank_name')
+                }
+            else:
+                print("User not found.")
+                return None
+        except Exception as e:
+            print("Error retrieving user information:", e)
             return None
 
     def get_banks(self):
+        query = 'SELECT bank_id, name FROM Banks'
         try:
-            query = 'SELECT bank_id, name FROM Banks'
             banks = self.db_manager.execute_query(query)
             if banks:
                 print("Available Banks:")
@@ -245,26 +249,23 @@ class TransactionManager:
                 WHERE account_number = ?
             ) AND bank_id = ?
         '''
-        self.db_manager.execute_query(query, (amount, account_number, bank_id))
-        print("Deposit successful.\n")
+        try:
+            self.db_manager.execute_query(query, (amount, account_number, bank_id))
+            print("Deposit successful.\n")
+        except Exception as e:
+            print("Error depositing funds:", e)
 
-
-    def transfer(self, account_manager, username, recipient_account_number: str, bank_id: int, amount: float, description: str):
+    def transfer(self, account_manager: AccountManager, username: str, recipient_account_number: str, bank_id: int, amount: float, description: str):
+        
         sender = account_manager.get_user_info(username)
         receiver = account_manager.get_user_info(recipient_account_number)
 
-        sender_user_id = sender['user_id']
-        sender_account_number = sender['account_number']
-        sender_bank_id = sender['bank_id']
-        sender_balance = sender['balance']
+        sender_user_id, sender_account_number = sender['user_id'], sender['account_number']
+        sender_bank_id, sender_balance = sender['bank_id'], sender['balance']
 
-        receiver_bank_id = receiver['bank_id']
-        receiver_user_id = receiver['user_id']
+        receiver_bank_id, receiver_user_id = receiver['bank_id'], receiver['user_id']
 
-        if sender_balance < amount:
-                print("Insufficient balance.")
-        # add to balance 
-        self.db_manager.execute_query('''
+        update_receiver_balance_query = '''
             UPDATE Wallets
             SET balance = balance + ?
             WHERE user_id = (
@@ -272,10 +273,8 @@ class TransactionManager:
                 FROM Users
                 WHERE account_number = ?
             ) AND bank_id = ?
-        ''', (amount, recipient_account_number, bank_id))
-
-        # deduct from account 
-        self.db_manager.execute_query('''
+        '''
+        update_sender_balance_query = '''
             UPDATE Wallets
             SET balance = balance - ?
             WHERE user_id = (
@@ -283,15 +282,22 @@ class TransactionManager:
                 FROM Users
                 WHERE username = ?
             )
-        ''', (amount, username))
+        '''
+        if sender_balance < amount:
+            print("Insufficient balance.")
+            return  # Exit the method if the balance is insufficient
+            
+        try:
+            # Update receiver's balance
+            self.db_manager.execute_query(update_receiver_balance_query, (amount, recipient_account_number, bank_id))
+            # Deduct from sender's balance
+            self.db_manager.execute_query(update_sender_balance_query, (amount, username))
 
-        self.record_transaction(sender_user_id, 
-                                sender_account_number, 
-                                receiver_user_id, 
-                                recipient_account_number, 
-                                amount, description, 
-                                sender_bank_id, receiver_bank_id)
-        print("\nTransfer Successful\n")
+            # Record the transaction
+            self.record_transaction(sender_user_id, sender_account_number, receiver_user_id, recipient_account_number, amount, description, sender_bank_id, receiver_bank_id)
+            print("\nTransfer Successful\n")
+        except Exception as e:
+            print("Error during transfer:", e)
 
     def record_transaction(self, sender_user_id, sender_account_number, receiver_user_id, receiver_account_number, amount, description, sender_bank_id, receiver_bank_id):
         # Record the transaction in the database
@@ -306,19 +312,7 @@ class TransactionManager:
             VALUES (?, CURRENT_TIMESTAMP, ?, 'CREDIT', ?, ?, ?, ?, ?)
         ''', (receiver_user_id, amount, description, sender_account_number, receiver_account_number, sender_bank_id, receiver_bank_id))
 
-    def transaction_history(self, account_manager, username, pin):
-        # Authenticate the user
-        auth_manager = AuthManager(self.db_manager)
-        if not auth_manager.authenticate_user(username, pin):
-            print("Authentication failed.")
-            return
-
-        # Retrieve user_id based on username
-        user_id = self.db_manager.execute_query('SELECT user_id FROM Users WHERE username = ?', (username,))
-        if not user_id:
-            print("User not found.")
-            return
-
+    def transaction_history(self, account_manager, user_id):
         # Retrieve transaction history for the user
         transaction_history = self.db_manager.execute_query('''
             SELECT th.timestamp, th.amount, th.transaction_type, th.description,
@@ -332,22 +326,21 @@ class TransactionManager:
             LEFT JOIN Users ru ON th.user_id = ru.user_id
             WHERE th.user_id = ?
             ORDER BY th.timestamp DESC
-        ''', (user_id[0],))
+        ''', (user_id,))
 
         if transaction_history:
             print("\nTransaction History:")
             for transaction in transaction_history:
-                timestamp = transaction[0]
-                amount = transaction[1]
-                transaction_type = transaction[2]
-                description = transaction[3]
-                sender_account_number = transaction[4]
-                receiver_account_number = transaction[5]
-                sender_bank_name = transaction[6]
-                receiver_bank_name = transaction[7]
-                sender_username = transaction[8]
-                # receiver_username = transaction[9]
-                receiver_username = account_manager.get_user_info(sender_account_number)['username']
+                timestamp = transaction.get('timestamp')
+                amount = transaction.get('amount')
+                transaction_type = transaction.get('transaction_type')
+                description = transaction.get('description')
+                sender_account_number = transaction.get('sender_account_number')
+                receiver_account_number = transaction.get('receiver_account_number')
+                sender_bank_name = transaction.get('sender_bank_name')
+                receiver_bank_name = transaction.get('receiver_bank_name')
+                sender_username = transaction.get('sender_username')
+                receiver_username = transaction.get('receiver_username')
 
                 print(f"Timestamp: {timestamp}, Amount: {amount}, Type: {transaction_type}, Description: {description}")
                 print(f"Sender Account Number: {sender_account_number}, Sender Bank: {sender_bank_name}, Sender Username: {sender_username}")
