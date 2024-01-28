@@ -156,6 +156,7 @@ class UserManager:
             INSERT INTO Wallets (user_id, bank_id)
             VALUES (?, ?)
         ''', (next(iter(user_id[0].values())), next(iter(bank_id[0].values())),))
+        
         print("\nUser registration successful.\n\n")
 # Authentication manager 
             
@@ -218,7 +219,13 @@ class AccountManager:
     def get_banks(self):
         try:
             query = 'SELECT bank_id, name FROM Banks'
-            return self.db_manager.execute_query(query)
+            banks = self.db_manager.execute_query(query)
+            if banks:
+                print("Available Banks:")
+                for bank in banks:
+                    print(f"{bank.get('bank_id')}: {bank.get('name')}")
+            else:
+                print("No banks found in the database.")
         except sqlite3.Error as e:
             print("Error fetching available banks:", str(e))
 
