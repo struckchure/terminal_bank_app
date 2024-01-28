@@ -1,33 +1,25 @@
-import os, platform, random, time
+import os, platform, random
 from typing import Tuple, Optional, Dict, List
 from data_operations.Manager import *
 from config import *
 
-# print(f"Initializing Database: {DB_NAME}")
-# initialization = Initialization()
-# # Create database
-# initialization.create_database_tables()
-# # Load api data to bank table 
-# try:
-#     initialization.load_bank_api()
-#     print("Initialization successfully.")
-# except Exception:
-#     print("Initialization failed.")
-# time.sleep(2)
-# print("Starting main application..."), time.sleep(2)
-# os.system('cls' if platform.system() == 'Windows' else 'clear')
-
-options = ["Create an Account", "View Account Information", "Deposit", "Transfer", "Transaction History", "Exit\n"]
-# Main function 
-def main():
-    db_manager = DatabaseManager()
-    user_manager = UserManager(db_manager)
-    auth_manager = AuthManager(db_manager)
-    account_manager = AccountManager(db_manager)
-    transaction_manager = TransactionManager(db_manager)
-    
+def _boot():
+    initialization = Initialization()
+    initialization.create_database_tables()
+    initialization.load_bank_api()
+    os.system('cls' if platform.system() == 'Windows' else 'clear')
     print("Welcome to the Terminal Bank App!")
 
+# Main function 
+def main():
+    _boot()
+    options = ["Create an Account", "View Account Information", "Deposit", "Transfer", "Transaction History", "Exit\n"]
+
+    db_manager = DatabaseManager()
+    user_manager = UserManager(db_manager)
+    auth_manager, account_manager = AuthManager(db_manager), AccountManager(db_manager)
+    transaction_manager = TransactionManager(db_manager)
+    
     while True:
         print("\nChoose an option:")
         for index, option in enumerate(options, start=1):

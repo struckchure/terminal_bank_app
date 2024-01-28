@@ -1,11 +1,15 @@
-import hashlib, sqlite3, secrets, requests
+import hashlib, sqlite3, secrets, requests, time, logging
 from typing import Tuple, Optional, Dict, List, Any
 from config import *
 
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 # Initialization manager
 class Initialization:
     @staticmethod
+    
     def create_database_tables():
+        logging.info(f'Loading database: {DB_NAME}.')
         # List of SQL queries to create tables
         create_table_queries = [
             '''
@@ -67,32 +71,39 @@ class Initialization:
 
     @staticmethod
     def load_bank_api():
-        api_url = API_URL
-        headers = {'Authorization': f'Bearer {API_SECRET_KEY}', 'Content-Type': 'application/json'}
-        response = requests.get(api_url, headers=headers)
-        
-        if response.status_code == 200:
-            data = response.json().get('data', [])
-            if data:
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                cursor.execute('''SELECT COUNT(*) FROM Banks''')
-                bank = cursor.fetchone()[0]
-                if bank == 0:
-                    cursor.executemany('''
-                        INSERT OR IGNORE INTO Banks (code, name) VALUES (?, ?)
-                    ''', [(bank['code'], bank['name']) for bank in data])
-                    conn.commit()
-                    conn.close()
-                    print("Bank data successfully inserted.")
+        try: 
+            logging.info(f'Loading bank data to Banks table from {API_URL}.')
+            headers = {'Authorization': f'Bearer {API_SECRET_KEY}', 'Content-Type': 'application/json'}
+            response = requests.get(API_URL, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json().get('data', [])
+                if data:
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    cursor.execute('''SELECT COUNT(*) FROM Banks''')
+                    bank = cursor.fetchone()[0]
+                    if bank == 0:
+                        cursor.executemany('''
+                            INSERT OR IGNORE INTO Banks (code, name) VALUES (?, ?)
+                        ''', [(bank['code'], bank['name']) for bank in data])
+                        conn.commit()
+                        conn.close()
+                        logging.info('Bank data successfully inserted')
+                else:
+                    logging.debug(f'No bank data found in the API response.')
             else:
-                print("No bank data found in the API response.")
-        else:
-            print(f"Failed to fetch data from the API. Status code: {response.status_code}")
+                logging.error(f'Failed to fetch data from the API. Status code: {response.status_code}')
+            time.sleep(5)
+            logging.info("Starting main application...")
+            time.sleep(2)
+        except Exception as e:
+            logging.error(f'An Error Occurred: {e}')
+
 
 # Database manager
 class DatabaseManager:
-    def __init__(self, db_name: str = 'bank_system.db'):
+    def __init__(self, db_name: str = DB_NAME):
         self.db_name = db_name
         self.conn = self._create_connection()
 
@@ -349,3 +360,4 @@ class TransactionManager:
 
         else:
             print("\nNo transaction history found.")
+
