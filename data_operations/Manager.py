@@ -180,9 +180,10 @@ class AuthManager:
         if pin_salt is not None:
             provided_pin_with_salt = pin_salt + pin
             provided_pin_hash = hashlib.sha256(provided_pin_with_salt.encode()).hexdigest()
+            print("Authentication successfull")
             return provided_pin_hash == stored_pin_hash
         else:
-            return False
+            print("Authentication failed")
 
 # Account manager 
 class AccountManager:
@@ -235,7 +236,7 @@ class TransactionManager:
         self.db_manager = db_manager
 
     def deposit(self, account_number: str, amount: float, bank_id: int):
-        self.db_manager.execute_query('''
+        query = '''
             UPDATE Wallets
             SET balance = balance + ?
             WHERE user_id = (
@@ -243,9 +244,25 @@ class TransactionManager:
                 FROM Users
                 WHERE account_number = ?
             ) AND bank_id = ?
-        ''', (amount, account_number, bank_id))
+        '''
+        self.db_manager.execute_query(query, (amount, account_number, bank_id))
+        print("Deposit successful.\n")
+
 
     def transfer(self, account_manager, username, recipient_account_number: str, bank_id: int, amount: float, description: str):
+        sender = account_manager.get_user_info(username)
+        receiver = account_manager.get_user_info(recipient_account_number)
+
+        sender_user_id = sender['user_id']
+        sender_account_number = sender['account_number']
+        sender_bank_id = sender['bank_id']
+        sender_balance = sender['balance']
+
+        receiver_bank_id = receiver['bank_id']
+        receiver_user_id = receiver['user_id']
+
+        if sender_balance < amount:
+                print("Insufficient balance.")
         # add to balance 
         self.db_manager.execute_query('''
             UPDATE Wallets
@@ -267,17 +284,15 @@ class TransactionManager:
                 WHERE username = ?
             )
         ''', (amount, username))
-        sender = account_manager.get_user_info(username)
-        receiver = account_manager.get_user_info(recipient_account_number)
 
-        sender_user_id = sender['user_id']
-        sender_account_number = sender['account_number']
-        sender_bank_id = sender['bank_id']
-        receiver_bank_id = receiver['bank_id']
-        receiver_user_id = receiver['user_id']
+        self.record_transaction(sender_user_id, 
+                                sender_account_number, 
+                                receiver_user_id, 
+                                recipient_account_number, 
+                                amount, description, 
+                                sender_bank_id, receiver_bank_id)
+        print("\nTransfer Successful\n")
 
-        self.record_transaction(sender_user_id, sender_account_number, receiver_user_id, recipient_account_number, amount, description, sender_bank_id, receiver_bank_id)
-        
     def record_transaction(self, sender_user_id, sender_account_number, receiver_user_id, receiver_account_number, amount, description, sender_bank_id, receiver_bank_id):
         # Record the transaction in the database
         self.db_manager.execute_query('''

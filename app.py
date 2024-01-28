@@ -43,56 +43,29 @@ def main():
             user_manager.register_user(username, account_number, pin, int(selected_bank_id)) # create user -> bank -> wallet
 
         elif choice == "2":
-            username = input("Enter your username: ")
-            pin = input("Enter 4-digit PIN: ")
-            if auth_manager.authenticate_user(username, pin):
-                account_info = account_manager.get_user_info(username)
-                if account_info:
-                    print("\nAccount Information:")
-                    print(f"Username: {account_info['username']}")
-                    print(f"Account Number: {account_info['account_number']}")
-                    print(f"Balance: {account_info['balance']}")
-                    print(f"Bank Name: {account_info['bank_name']} ({account_info['bank_code']})")
-                    print(f"Bank ID: {account_info['bank_id']}\n")
-            else:
-                print("Authentication failed")
+            username, pin = input("Enter your username: "), input("Enter 4-digit PIN: ")
+            auth_manager.authenticate_user(username, pin)
+            account_info = account_manager.get_user_info(username)
+            print("\nAccount Information:"), _account_info(account_info)
 
         elif choice == "3":
-            account_number = input("Enter your account number: ")
-            bank_id = input("Enter your bank ID: ")
+            account_number, bank_id = input("Enter your account number: "), input("Enter your bank ID: ")
             amount = float(input("Enter the deposit amount: "))
             transaction_manager.deposit(account_number, amount, int(bank_id))
-            print("Deposit successful.\n")
 
         elif choice == "4":
-            username = input("Enter your username: ")
-            pin = input("Enter 4-digit PIN: ")
-            if auth_manager.authenticate_user(username, pin):
-                print("\nAuthentication Successful\n")
-                bank_id = input("Enter Recipient Bank ID: ")
-                recipient_account_number = input("Enter Recipient Account Number: ")
-                recipient_account_info = account_manager.get_user_info(recipient_account_number)
-                sender_account_balance = account_manager.get_user_info(username)['balance']
-                if recipient_account_info:
-                    print("\nConfirm Account Information:")
-                    print(f"Username: {recipient_account_info['username']}")
-                    print(f"Account Number: {recipient_account_info['account_number']}")
-                    print(f"Balance: {recipient_account_info['balance']}")
-                    print(f"Bank Name: {recipient_account_info['bank_name']} ({recipient_account_info['bank_code']})")
-                    print(f"Bank ID: {recipient_account_info['bank_id']}\n")
+            username, pin = input("Enter your username: "), input("Enter 4-digit PIN: ")
+            auth_manager.authenticate_user(username, pin)
+            bank_id = input("Enter Recipient Bank ID: ")
+            recipient_account_number = input("Enter Recipient Account Number: ")
+            recipient_account_info = account_manager.get_user_info(recipient_account_number)
+            print("\nConfirm Account Information:"), _account_info(recipient_account_info)
 
-                    amount = float(input("Enter Transfer Amount: "))
-                    description = input("Add Description (Optional): ")
-                    if sender_account_balance < amount:
-                        print("Insufficient balance.")
-                    transaction_manager.transfer(account_manager, username, recipient_account_number, bank_id, amount, description)
-                    print("\nTransfer Successful\n")
-            else:
-                print("Authentication failed")
+            amount, description = float(input("Enter Transfer Amount: ")), input("Add Description (Optional): ")
+            transaction_manager.transfer(account_manager, username, recipient_account_number, bank_id, amount, description)
 
         elif choice == "5":
-            username = input("Enter your username: ")
-            pin = input("Enter 4-digit PIN: ")
+            username, pin = input("Enter your username: "), input("Enter 4-digit PIN: ")
             transaction_manager.transaction_history(account_manager, username, pin)
                 
         elif choice == "6":
@@ -107,10 +80,18 @@ def main():
             _exit()
             break
 
+def _account_info(param):
+    print(f"Username: {param['username']}")
+    print(f"Account Number: {param['account_number']}")
+    print(f"Balance: {param['balance']}")
+    print(f"Bank Name: {param['bank_name']} ({param['bank_code']})")
+    print(f"Bank ID: {param['bank_id']}\n")
+
 def _exit():
     print("Thank you for using the Terminal Bank App. Goodbye...!")
     time.sleep(2)
     os.system('cls' if platform.system() == 'Windows' else 'clear')
+
 
 if __name__ == "__main__":
     main()
